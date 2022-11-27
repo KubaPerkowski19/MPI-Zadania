@@ -1,0 +1,119 @@
+%%sh
+cat > pi-mpi.c << EOF
+#include <stdlib.h>
+#include <stdio.h>
+#include <mpi.h>
+#include <time.h>
+#include <sys/time.h>
+
+#define SIZE 19
+
+MPI_Status status;
+double Matrix[SIZE][SIZE];
+double Vector[SIZE], Result_Vector[SIZE];
+
+int main(int argc, char **argv) {
+
+int p_Count, p_Id; 
+int slaveCT, src;
+int dest, M_rows, offset;
+struct timeval start, stop;
+
+MPI_Init(&argc, &argv);
+MPI_Comm_rank(MPI_COMM_WORLD, &p_Id);
+MPI_Comm_size(MPI_COMM_WORLD, &p_Count);
+
+slaveCT = p_Count - 1;
+
+if (p_Id == 0) {
+
+double start = MPI_Wtime();
+
+srand ( time(NULL) );
+for (int i = 0; i<SIZE; i++) 
+{
+  for (int j = 0; j<SIZE; j++) 
+  {
+    Matrix[i][j]= rand()%10;
+  }
+  Vector[i]= rand()%10;
+}
+printf("\n");
+printf("MACIERZ");
+printf("\n");
+for (int i = 0; i<SIZE; i++) 
+{
+  for (int j = 0; j<SIZE; j++) 
+  {
+    printf("%.0f  ", Matrix[i][j]);
+  }
+  printf("\n");
+}
+
+printf("\n");
+printf("Wektor");
+printf("\n");
+for (int i = 0; i<SIZE; i++) 
+{
+  printf("%.0f  ", Vector[i]);
+}
+printf("\n");
+
+M_rows = SIZE/slaveCT;
+
+offset = 0;
+
+for (dest=1; dest <= slaveCT; dest++)
+{
+  MPI_Send(&offset, 1, MPI_INT, dest, 1, MPI_COMM_WORLD);
+  MPI_Send(&M_rows, 1, MPI_INT, dest, 1, MPI_COMM_WORLD);
+  MPI_Send(&Matrix[offset][0], M_rows*SIZE, MPI_DOUBLE,dest,1, MPI_COMM_WORLD);
+  MPI_Send(&Vector, SIZE, MPI_DOUBLE, dest, 1, MPI_COMM_WORLD);
+  offset = offset + M_rows;
+}
+
+for (int i = 1; i <= slaveCT; i++)
+{
+  src = i;
+  MPI_Recv(&offset, 1, MPI_INT, src, 2, MPI_COMM_WORLD, &status);
+  MPI_Recv(&M_rows, 1, MPI_INT, src, 2, MPI_COMM_WORLD, &status);
+  MPI_Recv(&Result_Vector[offset], M_rows*SIZE, MPI_DOUBLE, src, 2, MPI_COMM_WORLD, &status);
+}
+
+printf("\n");
+printf("Wynikowy wektor");
+printf("\n");
+for (int i = 0; i<SIZE; i++) 
+{
+  printf("%.0f  ", Result_Vector[i]);
+}
+printf ("\n");
+
+double end = MPI_Wtime();
+printf("\n");
+printf("Computing time %f",end - start);
+}
+
+if (p_Id > 0) 
+{
+  src = 0;
+  MPI_Recv(&offset, 1, MPI_INT, src, 1, MPI_COMM_WORLD, &status);
+  MPI_Recv(&M_rows, 1, MPI_INT, src, 1, MPI_COMM_WORLD, &status);
+  MPI_Recv(&Matrix, M_rows*SIZE, MPI_DOUBLE, src, 1, MPI_COMM_WORLD, &status);
+  MPI_Recv(&Vector, SIZE*SIZE, MPI_DOUBLE, src, 1, MPI_COMM_WORLD, &status);
+  for (int i = 0; i<M_rows; i++) 
+  {
+    for (int j = 0; j<SIZE; j++)
+    { 
+      Result_Vector[i] = Result_Vector[i] + Matrix[i][j] * Vector[j]; 
+    }
+  }
+
+  MPI_Send(&offset, 1, MPI_INT, 0, 2, MPI_COMM_WORLD);
+  MPI_Send(&M_rows, 1, MPI_INT, 0, 2, MPI_COMM_WORLD);
+  MPI_Send(&Result_Vector, M_rows*SIZE, MPI_DOUBLE, 0, 2, MPI_COMM_WORLD);
+}
+MPI_Finalize();
+}
+EOF
+mpicc pi-mpi.c && mpirun -n 20 --allow-run-as-root a.out
