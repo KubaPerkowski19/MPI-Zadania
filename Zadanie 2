@@ -1,0 +1,40 @@
+%%sh
+cat > pi-mpi.c << EOF
+#include <mpi.h>
+#include <stdio.h>
+
+double func(double x) { return x; }
+
+int main(int argc, char *argv[]) {
+
+  int proces_number,proces_amount;
+
+  MPI_Status status;
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &proces_number);
+  MPI_Comm_size(MPI_COMM_WORLD, &proces_amount);
+
+
+  double x_begin = 0.0;
+  double x_end = 1.0;
+  int n = 20;
+  double result;
+
+  double integral = 0.0;
+  double x;
+  for (long long proces = proces_number; proces < n; proces += proces_amount){
+    x = x_begin + proces * ((x_end-x_begin) / n);
+    integral += func(x);
+  }
+  
+  MPI_Reduce(&integral, &result, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+  if (proces_number == 0){
+    result += (func(x_begin) / 2) + (func(x_end) / 2);
+    result *= ((x_end-x_begin) / n);
+    printf("%f", result);
+  }
+  MPI_Finalize();
+  return 0;
+}
+EOF
+mpicc pi-mpi.c && mpirun -n 20 --allow-run-as-root a.out
