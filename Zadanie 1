@@ -4,10 +4,14 @@ cat > lpi-mpi.c << EOF
 #include <stdio.h>
 int main(int argc, char *argv[])
 {
+/* inicjalizacja MPI , określanie ilości procesów oraz aktualnego procesu */
+
   int rank, size;
   MPI_Init( &argc, &argv );
   MPI_Comm_size( MPI_COMM_WORLD, &size );
   MPI_Comm_rank( MPI_COMM_WORLD, &rank );
+  
+//definjowanie zmiennej z max uiteracjami
 
   double sum = 0.0;
   long Max_iterations = 1000;
