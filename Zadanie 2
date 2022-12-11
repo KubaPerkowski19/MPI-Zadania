@@ -2,11 +2,11 @@
 cat > pi-mpi.c << EOF
 #include <mpi.h>
 #include <stdio.h>
-
+//definicja funkcji startowej
 double func(double x) { return x; }
 
 int main(int argc, char *argv[]) {
-
+//zmienne przechowujące nr procesu i ich ilość
   int proces_number,proces_amount;
 
   MPI_Status status;
@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
   MPI_Comm_rank(MPI_COMM_WORLD, &proces_number);
   MPI_Comm_size(MPI_COMM_WORLD, &proces_amount);
 
-
+/* ustawienie startu i końca oraz dokładności (n) */
   double x_begin = 0.0;
   double x_end = 1.0;
   int n = 20;
