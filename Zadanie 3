@@ -5,7 +5,7 @@ cat > pi-mpi.c << EOF
 #include <mpi.h>
 #include <time.h>
 #include <sys/time.h>
-
+// ilość kolumn i wierszy w macierzach oraz wielkosc wektora
 #define SIZE 19
 
 MPI_Status status;
@@ -18,17 +18,19 @@ int p_Count, p_Id;
 int slaveCT, src;
 int dest, M_rows, offset;
 struct timeval start, stop;
-
+//Inicjalizacja MPI
 MPI_Init(&argc, &argv);
+//Uzyskanie numeru procesu
 MPI_Comm_rank(MPI_COMM_WORLD, &p_Id);
+//Uzyskanie liczby procesów
 MPI_Comm_size(MPI_COMM_WORLD, &p_Count);
-
+//Liczba procesów slaveCT mniejsza o 1 niz p_Count
 slaveCT = p_Count - 1;
-
+//Przyjęto, ze proces 0 Root (Master) - poniżej jego kod
 if (p_Id == 0) {
 
 double start = MPI_Wtime();
-
+// Inicjalizacja Macierzy
 srand ( time(NULL) );
 for (int i = 0; i<SIZE; i++) 
 {
@@ -38,6 +40,7 @@ for (int i = 0; i<SIZE; i++)
   }
   Vector[i]= rand()%10;
 }
+//Wypisanie wartości macierzy i wektora 
 printf("\n");
 printf("MACIERZ");
 printf("\n");
@@ -58,28 +61,46 @@ for (int i = 0; i<SIZE; i++)
   printf("%.0f  ", Vector[i]);
 }
 printf("\n");
-
+//Okreslene wielkosci macierzy, która zostanie wysłana do procesów Slave
 M_rows = SIZE/slaveCT;
+
+//offset określa aktualny pierwszy z wierszy do wysłania do aktualnego procesu Slave
 
 offset = 0;
 
+// Przygotowujemy wiersze i kolumny do wysłania do kolejnych procesów
+// Slave o Id od 1 do slaveCT, zostaną one przesłane wiadomością
+// z tag 1
+
 for (dest=1; dest <= slaveCT; dest++)
 {
+//Przesylamy offset wzledem wiersza 0
   MPI_Send(&offset, 1, MPI_INT, dest, 1, MPI_COMM_WORLD);
+//Ile wierszy przesylamy
   MPI_Send(&M_rows, 1, MPI_INT, dest, 1, MPI_COMM_WORLD);
+//przesylamy wiersze macierzy do procesow Slave
   MPI_Send(&Matrix[offset][0], M_rows*SIZE, MPI_DOUBLE,dest,1, MPI_COMM_WORLD);
   MPI_Send(&Vector, SIZE, MPI_DOUBLE, dest, 1, MPI_COMM_WORLD);
+//Modyfikujemy aktualną wartość zmiennej offset
   offset = offset + M_rows;
 }
+
+//Proces Root czeka aż procesy Slave obliczą cząstkowe iloczyny wierszy
+//i kolumn z macierzy i wektora, wyniki zostaną odebrane z wiadomościach
+// z tag 2
 
 for (int i = 1; i <= slaveCT; i++)
 {
   src = i;
+//Proces Root otrzymuje offset od aktualnego procesu Slave
   MPI_Recv(&offset, 1, MPI_INT, src, 2, MPI_COMM_WORLD, &status);
+//Proces Root otrzymuje liczbę wierszy, którą otrzyma od aktualnego
+//procesu Slave
   MPI_Recv(&M_rows, 1, MPI_INT, src, 2, MPI_COMM_WORLD, &status);
+//Otrzymanie danych cząstkowych z mnożenia macierz*wektor do Result_Vector
   MPI_Recv(&Result_Vector[offset], M_rows*SIZE, MPI_DOUBLE, src, 2, MPI_COMM_WORLD, &status);
 }
-
+//Wypisanie Result_Vector
 printf("\n");
 printf("Wynikowy wektor");
 printf("\n");
@@ -94,17 +115,29 @@ printf("\n");
 printf("Computing time %f",end - start);
 }
 
+// Kod do wykonania przez procesy Slave
+
 if (p_Id > 0) 
 {
+// Podanie procesom Slave numeru procesu Root
   src = 0;
+//Procesy Slave czekają na wiadomości z tag 1 od procesu Root
+//Każdy z procesów Slave wykonuje oddzielnie następujący kod
+//Procesy Slave otrzymują wartość offsetu od procesu Root
   MPI_Recv(&offset, 1, MPI_INT, src, 1, MPI_COMM_WORLD, &status);
+// Procesy Slave otrzymują liczbę wierszy, która zostanie przesłana od
+// procesu Root
   MPI_Recv(&M_rows, 1, MPI_INT, src, 1, MPI_COMM_WORLD, &status);
+// Procesy Slave otrzymują fragmenty macierzy A od procesu Root
   MPI_Recv(&Matrix, M_rows*SIZE, MPI_DOUBLE, src, 1, MPI_COMM_WORLD, &status);
+// Procesy Slave otrzymują fragmenty vektora od procesu Root
   MPI_Recv(&Vector, SIZE*SIZE, MPI_DOUBLE, src, 1, MPI_COMM_WORLD, &status);
+ // Mnożenie macierz y
   for (int i = 0; i<M_rows; i++) 
   {
     for (int j = 0; j<SIZE; j++)
     { 
+    // Element Matrix[i][j] mnożony przez Vector[j]
       Result_Vector[i] = Result_Vector[i] + Matrix[i][j] * Vector[j]; 
     }
   }
